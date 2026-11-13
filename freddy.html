@@ -1,0 +1,287 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FNaF - Night Escape</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#090911;color:white;
+ font-family:Arial,sans-serif;text-align:center;
+}
+header{padding:25px;background:#151522;border-bottom:2px solid #a32636}
+h1{color:#f3cb65;font-size:clamp(25px,5vw,42px);margin:8px}
+p{color:#ccc}
+main{max-width:850px;margin:25px auto;padding:15px}
+.panel{background:#171725;padding:20px;border:1px solid #454258;border-radius:12px}
+button,select{
+ background:#29283b;color:white;border:1px solid #625b78;
+ padding:12px;border-radius:8px;font-size:15px;cursor:pointer;margin:5px
+}
+button:hover{background:#a32636}
+.start{background:#a32636;font-weight:bold;padding:15px 35px}
+canvas{width:100%;max-width:650px;background:#050505;border:3px solid #555;image-rendering:pixelated}
+.stats{display:flex;justify-content:space-around;gap:10px;flex-wrap:wrap;margin:15px}
+.bar{height:12px;background:#333;width:180px;border-radius:10px;overflow:hidden}
+.fill{height:100%;background:#55ca83;width:100%}
+.hidden{display:none}
+.controls{display:grid;grid-template-columns:repeat(3,55px);justify-content:center;gap:5px;margin:15px}
+.controls button{font-size:20px}
+#message{color:#f3cb65;min-height:25px}
+</style>
+</head>
+<body>
+
+<header>
+ <p>FAZBEAR ENTERTAINMENT APRESENTA</p>
+ <h1>FNaF: NIGHT ESCAPE</h1>
+ <p>8-BIT MAZE SURVIVAL</p>
+</header>
+
+<main>
+ <section id="menu" class="panel">
+  <h2>🐻 ESCAPE DA PIZZARIA</h2>
+  <p>Encontre a saída antes que sua energia acabe!</p>
+  <p>Escolha seu personagem:</p>
+  <select id="character">
+   <option>🐻 Freddy</option>
+   <option>🐰 Bonnie</option>
+   <option>🐤 Chica</option>
+   <option>🦊 Foxy</option>
+   <option>🧍 Guarda Noturno</option>
+  </select>
+  <br><br>
+  <button class="start" onclick="startGame()">▶ JOGAR</button>
+ </section>
+
+ <section id="game" class="hidden">
+  <div class="panel">
+   <div class="stats">
+    <div>
+     🔋 BATERIA
+     <div class="bar"><div id="batteryBar" class="fill"></div></div>
+     <span id="batteryText">100%</span>
+    </div>
+    <div>
+     💪 ENERGIA
+     <div class="bar"><div id="energyBar" class="fill"></div></div>
+     <span id="energyText">100%</span>
+    </div>
+   </div>
+   <p id="levelText">NOITE 1</p>
+   <p id="movesText">Movimentos: 0</p>
+   <canvas id="maze" width="600" height="440"></canvas>
+   <p id="message">Encontre a saída!</p>
+   <button onclick="toggleLight()">🔦 Lanterna (F)</button>
+   <button onclick="restart()">↻ Reiniciar</button>
+  </div>
+
+  <div class="controls">
+   <span></span><button onclick="move(0,-1)">▲</button><span></span>
+   <button onclick="move(-1,0)">◀</button>
+   <button onclick="move(0,1)">▼</button>
+   <button onclick="move(1,0)">▶</button>
+  </div>
+  <p>Use W A S D ou as setas do teclado para andar.</p>
+ </section>
+
+ <section id="end" class="panel hidden">
+  <h2 id="endTitle">FIM DE JOGO</h2>
+  <p id="endMessage"></p>
+  <button class="start" onclick="nextAction()" id="nextButton">JOGAR NOVAMENTE</button>
+ </section>
+</main>
+
+<script>
+const maps=[
+[
+"###############",
+"#P    #     C S#",
+"# ### # ##### ##",
+"#   #   #     ##",
+"### ### # ### ##",
+"#B  #   A #    #",
+"# # # ##### ## #",
+"# #   C     #  #",
+"# ##### ### # ##",
+"#   A   # B    #",
+"###############"
+],
+[
+"#################",
+"#P    #    C    S#",
+"# ### # ####### ##",
+"#   #   #        #",
+"### ### # ###### #",
+"#B  #   A #      #",
+"# # # ##### ######",
+"# #   C     #    #",
+"# ##### ### # ## #",
+"# A   B   #      #",
+"#################"
+]
+];
+
+const canvas=document.getElementById("maze");
+const ctx=canvas.getContext("2d");
+let map,level=0,x=1,y=1,moves=0;
+let battery=100,energy=100,light=true,playing=false;
+let character="🐻";
+
+function startGame(){
+ character=document.getElementById("character").value.split(" ")[0];
+ document.getElementById("menu").classList.add("hidden");
+ document.getElementById("end").classList.add("hidden");
+ document.getElementById("game").classList.remove("hidden");
+ loadLevel(0);
+}
+
+function loadLevel(n){
+ level=n;
+ map=maps[n].map(row=>row.split(""));
+ x=1;y=1;moves=0;battery=100;energy=100;light=true;
+ playing=true;
+ document.getElementById("levelText").textContent="NOITE "+(level+1);
+ message("Encontre a saída S!");
+ draw();updateStats();
+}
+
+function message(t){
+ document.getElementById("message").textContent=t;
+}
+
+function draw(){
+ const rows=map.length;
+ const cols=Math.max(...map.map(r=>r.length));
+ const cw=canvas.width/cols,ch=canvas.height/rows;
+ ctx.fillStyle="#050509";
+ ctx.fillRect(0,0,canvas.width,canvas.height);
+
+ for(let j=0;j<rows;j++){
+  for(let i=0;i<map[j].length;i++){
+   const distance=Math.abs(i-x)+Math.abs(j-y);
+   const visible=(light&&battery>0)?distance<=4:distance<=1;
+   if(!visible)continue;
+
+   const cell=map[j][i];
+   ctx.fillStyle=cell==="#"?"#343448":"#171725";
+   ctx.fillRect(i*cw+1,j*ch+1,cw-2,ch-2);
+
+   let icon={C:"🍕",B:"🔋",A:"🤖",S:"🚪"}[cell];
+   if(icon){
+    ctx.font=(ch*.65)+"px Arial";
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.fillText(icon,(i+.5)*cw,(j+.5)*ch);
+   }
+  }
+ }
+ ctx.font=(ch*.7)+"px Arial";
+ ctx.textAlign="center";
+ ctx.textBaseline="middle";
+ ctx.fillText(character,(x+.5)*cw,(y+.5)*ch);
+}
+
+function move(dx,dy){
+ if(!playing)return;
+ const nx=x+dx,ny=y+dy;
+ if(ny<0||ny>=map.length||nx<0||nx>=map[ny].length||map[ny][nx]==="#"){
+  message("⛔ Caminho bloqueado!");
+  return;
+ }
+
+ const cell=map[ny][nx];
+ x=nx;y=ny;moves++;
+ energy=Math.max(0,energy-4);
+ if(light)battery=Math.max(0,battery-5);
+
+ if(cell==="C"){
+  energy=Math.min(100,energy+35);
+  map[ny][nx]=" ";
+  message("🍕 Pizza encontrada! +35 energia.");
+ }else if(cell==="B"){
+  battery=Math.min(100,battery+50);
+  map[ny][nx]=" ";
+  message("🔋 Bateria encontrada! +50 carga.");
+ }else if(cell==="A"){
+  energy=Math.max(0,energy-25);
+  map[ny][nx]=" ";
+  x=1;y=1;
+  message("🤖 Animatrônico encontrado! Você voltou ao início.");
+ }else if(cell==="S"){
+  draw();updateStats();finish(true);return;
+ }else{
+  message("Continue procurando a saída...");
+ }
+
+ draw();updateStats();
+ if(energy<=0)finish(false);
+}
+
+function updateStats(){
+ document.getElementById("batteryBar").style.width=battery+"%";
+ document.getElementById("energyBar").style.width=energy+"%";
+ document.getElementById("batteryText").textContent=battery+"%";
+ document.getElementById("energyText").textContent=energy+"%";
+ document.getElementById("movesText").textContent="Movimentos: "+moves;
+}
+
+function toggleLight(){
+ if(!playing)return;
+ if(battery<=0){
+  light=false;
+  message("A bateria acabou!");
+ }else{
+  light=!light;
+  message(light?"Lanterna ligada.":"Lanterna desligada.");
+ }
+ draw();
+}
+
+function finish(win){
+ playing=false;
+ document.getElementById("game").classList.add("hidden");
+ document.getElementById("end").classList.remove("hidden");
+
+ document.getElementById("endTitle").textContent=
+  win?"🏆 VOCÊ ESCAPOU!":"🌑 FIM DE JOGO";
+
+ document.getElementById("endMessage").textContent=
+  win?"Você concluiu a noite em "+moves+" movimentos!":
+  "Sua energia acabou. Tente novamente!";
+
+ document.getElementById("nextButton").textContent=
+  win&&level===0?"IR PARA A NOITE 2":"JOGAR NOVAMENTE";
+}
+
+function nextAction(){
+ if(level===0&&!playing&&
+ document.getElementById("endTitle").textContent.includes("ESCAPOU")){
+  document.getElementById("end").classList.add("hidden");
+  document.getElementById("game").classList.remove("hidden");
+  loadLevel(1);
+ }else{
+  document.getElementById("end").classList.add("hidden");
+  document.getElementById("menu").classList.remove("hidden");
+ }
+}
+
+function restart(){loadLevel(level)}
+
+document.addEventListener("keydown",e=>{
+ const k=e.key.toLowerCase();
+ const dirs={w:[0,-1],arrowup:[0,-1],s:[0,1],
+ arrowdown:[0,1],a:[-1,0],arrowleft:[-1,0],
+ d:[1,0],arrowright:[1,0]};
+ if(dirs[k]){
+  e.preventDefault();
+  move(...dirs[k]);
+ }else if(k==="f"){
+  toggleLight();
+ }
+});
+</script>
+</body>
+</html>
